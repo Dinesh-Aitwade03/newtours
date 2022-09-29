@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>htmlreport.html</h1>
+    <p>Report generated on 20-Sep-2022 at 16:25:15 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19043-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"allure-pytest": "2.9.45", "forked": "1.4.0", "html": "3.1.1", "metadata": "2.0.1", "xdist": "2.5.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.7</td></tr></table>
+    <h2>Summary</h2>
+    <p>7 tests ran in 230.53 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">4 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">3 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_casess/Test_demo.py::Test_demo::test_cheeckbox</td>
+          <td class="col-duration">28.60</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_casess.Test_demo.Test_demo object at 0x000002132A3932B0&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;2ccb56fe5a5e05bfdeba06d19aac6d98&quot;)&gt;<br/><br/>    def test_cheeckbox(self,setup):<br/>        self.driver=setup<br/>        self.driver.get(self.baseurl)<br/>        self.objdrop = Demo_page(self.driver)<br/>&gt;       self.objdrop.checkbox()<br/><br/>test_casess\Test_demo.py:47: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;pageobj.login_page.Demo_page object at 0x000002132A4519A0&gt;<br/><br/>    def checkbox(self):<br/>    <br/>        sel=self.driver.find_element(By.ID,self.checkbox1_id).is_selected()<br/>        if sel==True:<br/>            pass<br/>        else:<br/>&gt;           sel.click()<br/><span class="error">E           AttributeError: &#x27;bool&#x27; object has no attribute &#x27;click&#x27;</span><br/><br/>pageobj\login_page.py:60: AttributeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_casess/Test_demo.py::Test_demo::test_llink</td>
+          <td class="col-duration">29.04</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_casess.Test_demo.Test_demo object at 0x000002132A393070&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;af7b7ec298c6dd1ae36ced27b5c0bdbd&quot;)&gt;<br/><br/>    def test_llink(self,setup):<br/>        self.driver = setup<br/>        self.driver.get(self.baseurl)<br/>        self.objdrop = Demo_page(self.driver)<br/>&gt;       self.objdrop.url_link()<br/><br/>test_casess\Test_demo.py:54: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>pageobj\login_page.py:68: in url_link<br/>    self.driver.find_element(By.LINK_TEXT,self.urllink_LINK_TEXT).click()<br/>..\..\AppData\Local\Programs\Python\Python39\lib\site-packages\selenium\webdriver\remote\webdriver.py:855: in find_element<br/>    return self.execute(Command.FIND_ELEMENT, {<br/>..\..\AppData\Local\Programs\Python\Python39\lib\site-packages\selenium\webdriver\remote\webdriver.py:428: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000002132AC9A8B0&gt;<br/>response = {&#x27;status&#x27;: 404, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;no such element&quot;,&quot;message&quot;:&quot;no such element: Unable to locate element: {\...\n\\tRtlGetAppContainerNamedObjectPath [0x775A7B5E+286]\\n\\tRtlGetAppContainerNamedObjectPath [0x775A7B2E+238]\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&#x27;stackTrace&#x27;) or value.get(&#x27;stacktrace&#x27;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&#x27;\n&#x27;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                        if &#x27;className&#x27; in frame:<br/>                            meth = &quot;{}.{}&quot;.format(frame[&#x27;className&#x27;], meth)<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;link text&quot;,&quot;selector&quot;:&quot;https://seleniumbase.com/&quot;}</span><br/><span class="error">E         (Session info: chrome=105.0.5195.127)</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       Backtrace:</span><br/><span class="error">E       	Ordinal0 [0x0037DF13+2219795]</span><br/><span class="error">E       	Ordinal0 [0x00312841+1779777]</span><br/><span class="error">E       	Ordinal0 [0x0022423D+803389]</span><br/><span class="error">E       	Ordinal0 [0x00253025+995365]</span><br/><span class="error">E       	Ordinal0 [0x002531EB+995819]</span><br/><span class="error">E       	Ordinal0 [0x00280F52+1183570]</span><br/><span class="error">E       	Ordinal0 [0x0026E844+1108036]</span><br/><span class="error">E       	Ordinal0 [0x0027F192+1175954]</span><br/><span class="error">E       	Ordinal0 [0x0026E616+1107478]</span><br/><span class="error">E       	Ordinal0 [0x00247F89+950153]</span><br/><span class="error">E       	Ordinal0 [0x00248F56+954198]</span><br/><span class="error">E       	GetHandleVerifier [0x00672CB2+3040210]</span><br/><span class="error">E       	GetHandleVerifier [0x00662BB4+2974420]</span><br/><span class="error">E       	GetHandleVerifier [0x00416A0A+565546]</span><br/><span class="error">E       	GetHandleVerifier [0x00415680+560544]</span><br/><span class="error">E       	Ordinal0 [0x00319A5C+1808988]</span><br/><span class="error">E       	Ordinal0 [0x0031E3A8+1827752]</span><br/><span class="error">E       	Ordinal0 [0x0031E495+1827989]</span><br/><span class="error">E       	Ordinal0 [0x003280A4+1867940]</span><br/><span class="error">E       	BaseThreadInitThunk [0x76EEFA29+25]</span><br/><span class="error">E       	RtlGetAppContainerNamedObjectPath [0x775A7B5E+286]</span><br/><span class="error">E       	RtlGetAppContainerNamedObjectPath [0x775A7B2E+238]</span><br/><br/>..\..\AppData\Local\Programs\Python\Python39\lib\site-packages\selenium\webdriver\remote\errorhandler.py:243: NoSuchElementException<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_casess/Test_demo.py::Test_demo::test_drag</td>
+          <td class="col-duration">42.69</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_casess.Test_demo.Test_demo object at 0x000002132A393BE0&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;5e42856854f3bb7dc7f7a6fde0f7b5e3&quot;)&gt;<br/><br/>    def test_drag(self,setup):<br/>        self.driver = setup<br/>        self.driver.get(self.baseurl)<br/>        self.objdrop = Demo_page(self.driver)<br/>&gt;       self.objdrop.draganddrop()<br/><br/>test_casess\Test_demo.py:68: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>pageobj\login_page.py:65: in draganddrop<br/>    ActionChains(self.driver).drag_and_drop(sourceele,targetele).perform()<br/>..\..\AppData\Local\Programs\Python\Python39\lib\site-packages\selenium\webdriver\common\action_chains.py:78: in perform<br/>    self.w3c_actions.perform()<br/>..\..\AppData\Local\Programs\Python\Python39\lib\site-packages\selenium\webdriver\common\actions\action_builder.py:88: in perform<br/>    self.driver.execute(Command.W3C_ACTIONS, enc)<br/>..\..\AppData\Local\Programs\Python\Python39\lib\site-packages\selenium\webdriver\remote\webdriver.py:428: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000002132AD71760&gt;<br/>response = {&#x27;status&#x27;: 400, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;element not interactable&quot;,&quot;message&quot;:&quot;element not interactable: [object HT...\n\\tRtlGetAppContainerNamedObjectPath [0x775A7B5E+286]\\n\\tRtlGetAppContainerNamedObjectPath [0x775A7B2E+238]\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&#x27;stackTrace&#x27;) or value.get(&#x27;stacktrace&#x27;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&#x27;\n&#x27;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                        if &#x27;className&#x27; in frame:<br/>                            meth = &quot;{}.{}&quot;.format(frame[&#x27;className&#x27;], meth)<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.ElementNotInteractableException: Message: element not interactable: [object HTMLDivElement] has no size and location</span><br/><span class="error">E         (Session info: chrome=105.0.5195.127)</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       Backtrace:</span><br/><span class="error">E       	Ordinal0 [0x0037DF13+2219795]</span><br/><span class="error">E       	Ordinal0 [0x00312841+1779777]</span><br/><span class="error">E       	Ordinal0 [0x0022423D+803389]</span><br/><span class="error">E       	Ordinal0 [0x00226D04+814340]</span><br/><span class="error">E       	Ordinal0 [0x00226BC2+814018]</span><br/><span class="error">E       	Ordinal0 [0x00226E50+814672]</span><br/><span class="error">E       	Ordinal0 [0x00258DB1+1019313]</span><br/><span class="error">E       	Ordinal0 [0x00258446+1016902]</span><br/><span class="error">E       	Ordinal0 [0x00286C08+1207304]</span><br/><span class="error">E       	Ordinal0 [0x0026E7FC+1107964]</span><br/><span class="error">E       	Ordinal0 [0x0027F192+1175954]</span><br/><span class="error">E       	Ordinal0 [0x0026E616+1107478]</span><br/><span class="error">E       	Ordinal0 [0x00247F89+950153]</span><br/><span class="error">E       	Ordinal0 [0x00248F56+954198]</span><br/><span class="error">E       	GetHandleVerifier [0x00672CB2+3040210]</span><br/><span class="error">E       	GetHandleVerifier [0x00662BB4+2974420]</span><br/><span class="error">E       	GetHandleVerifier [0x00416A0A+565546]</span><br/><span class="error">E       	GetHandleVerifier [0x00415680+560544]</span><br/><span class="error">E       	Ordinal0 [0x00319A5C+1808988]</span><br/><span class="error">E       	Ordinal0 [0x0031E3A8+1827752]</span><br/><span class="error">E       	Ordinal0 [0x0031E495+1827989]</span><br/><span class="error">E       	Ordinal0 [0x003280A4+1867940]</span><br/><span class="error">E       	BaseThreadInitThunk [0x76EEFA29+25]</span><br/><span class="error">E       	RtlGetAppContainerNamedObjectPath [0x775A7B5E+286]</span><br/><span class="error">E       	RtlGetAppContainerNamedObjectPath [0x775A7B2E+238]</span><br/><br/>..\..\AppData\Local\Programs\Python\Python39\lib\site-packages\selenium\webdriver\remote\errorhandler.py:243: ElementNotInteractableException<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_casess/Test_demo.py::Test_demo::test_damot</td>
+          <td class="col-duration">48.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>[WDM] - Downloading:   0%|          | 0.00/6.68M [00:00&lt;?, ?B/s][WDM] - Downloading:   2%|▏         | 152k/6.68M [00:00&lt;00:04, 1.42MB/s][WDM] - Downloading:   4%|▍         | 296k/6.68M [00:00&lt;00:06, 1.10MB/s][WDM] - Downloading:   6%|▋         | 432k/6.68M [00:00&lt;00:05, 1.17MB/s][WDM] - Downloading:   8%|▊         | 568k/6.68M [00:00&lt;00:05, 1.21MB/s][WDM] - Downloading:  11%|█         | 728k/6.68M [00:00&lt;00:04, 1.31MB/s][WDM] - Downloading:  13%|█▎        | 912k/6.68M [00:00&lt;00:04, 1.22MB/s][WDM] - Downloading:  18%|█▊        | 1.22M/6.68M [00:00&lt;00:03, 1.76MB/s][WDM] - Downloading:  21%|██        | 1.40M/6.68M [00:00&lt;00:03, 1.75MB/s][WDM] - Downloading:  24%|██▎       | 1.59M/6.68M [00:01&lt;00:03, 1.76MB/s][WDM] - Downloading:  26%|██▋       | 1.77M/6.68M [00:01&lt;00:04, 1.27MB/s][WDM] - Downloading:  29%|██▊       | 1.91M/6.68M [00:01&lt;00:04, 1.15MB/s][WDM] - Downloading:  31%|███       | 2.04M/6.68M [00:01&lt;00:05, 948kB/s] [WDM] - Downloading:  32%|███▏      | 2.15M/6.68M [00:01&lt;00:05, 865kB/s][WDM] - Downloading:  34%|███▎      | 2.24M/6.68M [00:02&lt;00:06, 739kB/s][WDM] - Downloading:  35%|███▍      | 2.32M/6.68M [00:02&lt;00:06, 714kB/s][WDM] - Downloading:  36%|███▌      | 2.40M/6.68M [00:02&lt;00:06, 700kB/s][WDM] - Downloading:  37%|███▋      | 2.47M/6.68M [00:02&lt;00:07, 612kB/s][WDM] - Downloading:  38%|███▊      | 2.53M/6.68M [00:02&lt;00:08, 539kB/s][WDM] - Downloading:  39%|███▊      | 2.59M/6.68M [00:02&lt;00:09, 476kB/s][WDM] - Downloading:  40%|███▉      | 2.64M/6.68M [00:03&lt;00:09, 457kB/s][WDM] - Downloading:  40%|████      | 2.69M/6.68M [00:03&lt;00:09, 456kB/s][WDM] - Downloading:  41%|████      | 2.73M/6.68M [00:03&lt;00:10, 386kB/s][WDM] - Downloading:  42%|████▏     | 2.79M/6.68M [00:03&lt;00:09, 418kB/s][WDM] - Downloading:  43%|████▎     | 2.85M/6.68M [00:03&lt;00:08, 463kB/s][WDM] - Downloading:  44%|████▍     | 2.93M/6.68M [00:03&lt;00:07, 538kB/s][WDM] - Downloading:  45%|████▌     | 3.02M/6.68M [00:03&lt;00:06, 590kB/s][WDM] - Downloading:  47%|████▋     | 3.12M/6.68M [00:03&lt;00:05, 644kB/s][WDM] - Downloading:  48%|████▊     | 3.21M/6.68M [00:04&lt;00:05, 712kB/s][WDM] - Downloading:  49%|████▉     | 3.29M/6.68M [00:04&lt;00:05, 662kB/s][WDM] - Downloading:  50%|█████     | 3.36M/6.68M [00:04&lt;00:05, 665kB/s][WDM] - Downloading:  51%|█████▏    | 3.43M/6.68M [00:04&lt;00:05, 577kB/s][WDM] - Downloading:  52%|█████▏    | 3.49M/6.68M [00:04&lt;00:06, 543kB/s][WDM] - Downloading:  53%|█████▎    | 3.55M/6.68M [00:04&lt;00:06, 486kB/s][WDM] - Downloading:  54%|█████▍    | 3.60M/6.68M [00:04&lt;00:06, 479kB/s][WDM] - Downloading:  55%|█████▍    | 3.65M/6.68M [00:04&lt;00:06, 471kB/s][WDM] - Downloading:  55%|█████▌    | 3.70M/6.68M [00:05&lt;00:06, 448kB/s][WDM] - Downloading:  56%|█████▌    | 3.74M/6.68M [00:05&lt;00:07, 417kB/s][WDM] - Downloading:  57%|█████▋    | 3.80M/6.68M [00:05&lt;00:06, 432kB/s][WDM] - Downloading:  58%|█████▊    | 3.90M/6.68M [00:05&lt;00:05, 533kB/s][WDM] - Downloading:  59%|█████▉    | 3.96M/6.68M [00:05&lt;00:05, 550kB/s][WDM] - Downloading:  60%|██████    | 4.02M/6.68M [00:05&lt;00:04, 564kB/s][WDM] - Downloading:  61%|██████    | 4.09M/6.68M [00:05&lt;00:05, 543kB/s][WDM] - Downloading:  62%|██████▏   | 4.16M/6.68M [00:05&lt;00:04, 600kB/s][WDM] - Downloading:  64%|██████▎   | 4.25M/6.68M [00:06&lt;00:03, 663kB/s][WDM] - Downloading:  65%|██████▍   | 4.32M/6.68M [00:06&lt;00:03, 640kB/s][WDM] - Downloading:  66%|██████▌   | 4.38M/6.68M [00:06&lt;00:03, 604kB/s][WDM] - Downloading:  67%|██████▋   | 4.45M/6.68M [00:06&lt;00:04, 558kB/s][WDM] - Downloading:  67%|██████▋   | 4.50M/6.68M [00:06&lt;00:04, 549kB/s][WDM] - Downloading:  68%|██████▊   | 4.55M/6.68M [00:06&lt;00:04, 542kB/s][WDM] - Downloading:  69%|██████▉   | 4.62M/6.68M [00:06&lt;00:03, 558kB/s][WDM] - Downloading:  70%|██████▉   | 4.67M/6.68M [00:06&lt;00:03, 549kB/s][WDM] - Downloading:  71%|███████   | 4.73M/6.68M [00:07&lt;00:03, 541kB/s][WDM] - Downloading:  72%|███████▏  | 4.78M/6.68M [00:07&lt;00:04, 459kB/s][WDM] - Downloading:  73%|███████▎  | 4.88M/6.68M [00:07&lt;00:03, 567kB/s][WDM] - Downloading:  74%|███████▍  | 4.97M/6.68M [00:07&lt;00:02, 612kB/s][WDM] - Downloading:  75%|███████▌  | 5.03M/6.68M [00:07&lt;00:02, 586kB/s][WDM] - Downloading:  76%|███████▋  | 5.09M/6.68M [00:07&lt;00:03, 548kB/s][WDM] - Downloading:  77%|███████▋  | 5.15M/6.68M [00:07&lt;00:02, 541kB/s][WDM] - Downloading:  78%|███████▊  | 5.20M/6.68M [00:07&lt;00:02, 537kB/s][WDM] - Downloading:  79%|███████▊  | 5.26M/6.68M [00:08&lt;00:03, 494kB/s][WDM] - Downloading:  80%|███████▉  | 5.31M/6.68M [00:08&lt;00:03, 450kB/s][WDM] - Downloading:  80%|████████  | 5.36M/6.68M [00:08&lt;00:03, 434kB/s][WDM] - Downloading:  81%|████████  | 5.41M/6.68M [00:08&lt;00:03, 407kB/s][WDM] - Downloading:  82%|████████▏ | 5.45M/6.68M [00:08&lt;00:03, 403kB/s][WDM] - Downloading:  82%|████████▏ | 5.49M/6.68M [00:08&lt;00:03, 396kB/s][WDM] - Downloading:  83%|████████▎ | 5.53M/6.68M [00:08&lt;00:03, 390kB/s][WDM] - Downloading:  84%|████████▎ | 5.58M/6.68M [00:08&lt;00:02, 407kB/s][WDM] - Downloading:  84%|████████▍ | 5.62M/6.68M [00:09&lt;00:02, 392kB/s][WDM] - Downloading:  85%|████████▍ | 5.66M/6.68M [00:09&lt;00:02, 372kB/s][WDM] - Downloading:  85%|████████▌ | 5.70M/6.68M [00:09&lt;00:02, 358kB/s][WDM] - Downloading:  86%|████████▌ | 5.73M/6.68M [00:09&lt;00:02, 363kB/s][WDM] - Downloading:  87%|████████▋ | 5.78M/6.68M [00:09&lt;00:02, 387kB/s][WDM] - Downloading:  87%|████████▋ | 5.82M/6.68M [00:09&lt;00:02, 384kB/s][WDM] - Downloading:  88%|████████▊ | 5.86M/6.68M [00:09&lt;00:02, 338kB/s][WDM] - Downloading:  88%|████████▊ | 5.91M/6.68M [00:09&lt;00:02, 369kB/s][WDM] - Downloading:  89%|████████▉ | 5.95M/6.68M [00:10&lt;00:02, 370kB/s][WDM] - Downloading:  90%|████████▉ | 5.98M/6.68M [00:10&lt;00:01, 371kB/s][WDM] - Downloading:  90%|█████████ | 6.03M/6.68M [00:10&lt;00:01, 378kB/s][WDM] - Downloading:  91%|█████████ | 6.07M/6.68M [00:10&lt;00:01, 377kB/s][WDM] - Downloading:  92%|█████████▏| 6.12M/6.68M [00:10&lt;00:01, 398kB/s][WDM] - Downloading:  92%|█████████▏| 6.16M/6.68M [00:10&lt;00:01, 391kB/s][WDM] - Downloading:  93%|█████████▎| 6.21M/6.68M [00:10&lt;00:01, 413kB/s][WDM] - Downloading:  94%|█████████▍| 6.27M/6.68M [00:10&lt;00:00, 445kB/s][WDM] - Downloading:  95%|█████████▍| 6.32M/6.68M [00:10&lt;00:00, 468kB/s][WDM] - Downloading:  95%|█████████▌| 6.37M/6.68M [00:11&lt;00:00, 358kB/s][WDM] - Downloading:  96%|█████████▌| 6.41M/6.68M [00:11&lt;00:00, 327kB/s][WDM] - Downloading:  97%|█████████▋| 6.45M/6.68M [00:11&lt;00:00, 357kB/s][WDM] - Downloading:  97%|█████████▋| 6.50M/6.68M [00:11&lt;00:00, 380kB/s][WDM] - Downloading:  98%|█████████▊| 6.55M/6.68M [00:11&lt;00:00, 419kB/s][WDM] - Downloading:  99%|█████████▉| 6.60M/6.68M [00:11&lt;00:00, 427kB/s][WDM] - Downloading: 100%|█████████▉| 6.66M/6.68M [00:11&lt;00:00, 437kB/s][WDM] - Downloading: 100%|██████████| 6.68M/6.68M [00:11&lt;00:00, 588kB/s]
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_casess/Test_demo.py::Test_demo::test_slider</td>
+          <td class="col-duration">18.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_casess/Test_demo.py::Test_demo::test_drop</td>
+          <td class="col-duration">27.02</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Set to 25%
+Set to 50%
+Set to 75%
+Set to 100%
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_casess/Test_demo.py::Test_demo::test_readonlly</td>
+          <td class="col-duration">27.31</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>
+<br/></div></td></tr></tbody></table></body></html>
